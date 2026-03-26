@@ -1,0 +1,26 @@
+{
+  "name": "wa-agent",
+  "version": "1.0.0",
+  "description": "WhatsApp assistant automation powered by Baileys and Ollama.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "check": "node --check index.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "baileys",
+    "ollama",
+    "assistant",
+    "automation"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "axios": "^1.13.4",
+    "dotenv": "^17.2.3",
+    "pino": "^10.3.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
