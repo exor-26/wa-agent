@@ -144,6 +144,113 @@ function formatHistory(chatJid, mode) {
     .join('\n')
 }
 
+function normalizeText(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function quickExternalReply(text) {
+  const normalized = normalizeText(text)
+  const wantsRelay = /\b(urgent|meet|meeting|call|talk|speak|message|inform|tell him|tell aditya)\b/.test(normalized)
+  const asksIdentity =
+    /\bwho are you\b/.test(normalized) ||
+    /\bwhat are you\b(?! doing\b)/.test(normalized) ||
+    /\byour purpose\b/.test(normalized) ||
+    /\bwhat is your purpose\b/.test(normalized) ||
+    /\bare you ai\b/.test(normalized) ||
+    /\bwhich llm\b/.test(normalized) ||
+    /\bwhat llm\b/.test(normalized) ||
+    /\bwhat model\b/.test(normalized)
+  const asksCapabilities =
+    /\bwhat can you do\b/.test(normalized) ||
+    /\bhow can you help\b/.test(normalized)
+  const asksClaraActivity =
+    /\bwhat are you doing\b/.test(normalized) ||
+    /\bwhat do you do here\b/.test(normalized)
+  const asksLocation =
+    /\bkaha ho\b/.test(normalized) ||
+    /\bwhere are you\b/.test(normalized) ||
+    /\bwhere is aditya\b/.test(normalized)
+  const asksAdityaActivity =
+    /\bwhat is he doing\b/.test(normalized) ||
+    /\bwhat's he doing\b/.test(normalized) ||
+    /\bwhat is aditya doing\b/.test(normalized) ||
+    /\bwhat he is doing\b/.test(normalized)
+  const asksAvailability =
+    /\bwhen.*free\b/.test(normalized) ||
+    /\bwhen is aditya free\b/.test(normalized) ||
+    /\bwhen will aditya be free\b/.test(normalized) ||
+    /\bwhen are you free\b/.test(normalized) ||
+    /\bwhen available\b/.test(normalized) ||
+    /\bavailability\b/.test(normalized)
+  const saysBroken =
+    /\bmalfunction\b/.test(normalized) ||
+    /\bmalfunctioning\b/.test(normalized) ||
+    /\bnot working\b/.test(normalized) ||
+    /\bbroken\b/.test(normalized)
+
+  if (/^(hi+|hey+|hello+|hlw+)$/.test(normalized)) {
+    return 'Hello.'
+  }
+
+  if (/^(ok|okay|okk|thanks|thank you|nothing|nothing else|bye|alright|fine)\.?$/.test(normalized)) {
+    if (/\b(thanks|thank you)\b/.test(normalized)) {
+      return "You're welcome."
+    }
+    return 'Alright.'
+  }
+
+  if (
+    asksIdentity ||
+    asksCapabilities ||
+    asksClaraActivity ||
+    asksLocation ||
+    asksAdityaActivity ||
+    asksAvailability ||
+    saysBroken
+  ) {
+    const parts = []
+
+    if (saysBroken) {
+      parts.push('Sorry about that.')
+    }
+
+    if (asksIdentity) {
+      parts.push("I'm Clara, handling messages for Aditya while he's unavailable.")
+    }
+
+    if (asksClaraActivity) {
+      parts.push("I'm here handling messages for Aditya right now.")
+    }
+
+    if (asksCapabilities) {
+      parts.push('I can help with general questions and pass important messages to Aditya when needed.')
+    }
+
+    if (asksLocation) {
+      parts.push("I don't know Aditya's current location right now.")
+    }
+
+    if (asksAdityaActivity) {
+      parts.push("I don't know what Aditya is doing right now.")
+    }
+
+    if (asksAvailability) {
+      parts.push("I don't know exactly when Aditya will be free.")
+    }
+
+    if (wantsRelay && !asksCapabilities && !asksIdentity) {
+      parts.push('I can pass your message to him.')
+    }
+
+    return [...new Set(parts)].join(' ')
+  }
+
+  return null
+}
+
 function log(event, data = {}) {
   if (
     event === 'MESSAGE_SKIPPED_OLD_APPEND' ||
@@ -303,23 +410,40 @@ function buildExternalPrompt(chatJid) {
     'Reply as Clara, not as Aditya.',
     'Act professional, human, calm, and helpful.',
     'Help directly when the query can be answered without Aditya.',
+    'Solve general questions directly, including explanations, writing help, reasoning, and math when possible.',
     'If the request needs Aditya personally (meeting, call, approval, payment, decision, availability), do not solve it yourself; acknowledge it and relay it briefly.',
     'Do not reveal private or personal information about Aditya.',
     'Do not make promises, commitments, approvals, timelines, or decisions on Aditya\'s behalf.',
     'Do not claim Aditya will call, meet, visit, approve, pay, or respond by a specific time.',
+    'If asked about Aditya\'s current location, activity, or availability, say you do not know.',
     'If something needs Aditya personally, acknowledge it and say you will pass it on or that he can review it when available.',
     'Do not suggest alternative contact channels unless the user explicitly asks.',
     'If the user is emotional, urgent, confused, or asking for help, respond appropriately and professionally.',
     'Use 1 to 3 short sentences unless more detail is necessary.',
     'Keep the reply concise and natural.',
+    'Avoid repetitive filler such as "How can I assist you today?" on every message.',
     '',
     'Examples:',
     'User: Who are you?',
     'Clara: I\'m Clara. I\'m handling messages for Aditya while he\'s unavailable.',
+    'User: What are you doing?',
+    'Clara: I\'m here handling messages for Aditya right now.',
+    'User: Where is Aditya right now?',
+    'Clara: I don\'t know Aditya\'s current location right now.',
+    'User: What is Aditya doing right now?',
+    'Clara: I don\'t know what Aditya is doing right now.',
+    'User: When will Aditya be free?',
+    'Clara: I don\'t know exactly when Aditya will be free.',
+    'User: Who are you and where is Aditya?',
+    'Clara: I\'m Clara, handling messages for Aditya while he\'s unavailable. I don\'t know Aditya\'s current location right now.',
+    'User: You are malfunctioning.',
+    'Clara: Sorry about that. I\'m here to help.',
     'User: I need to meet Aditya urgently.',
     'Clara: Understood. I\'ve noted that this is urgent and will pass it on to Aditya.',
     'User: What is 2 + 2?',
     'Clara: It is 4.',
+    'User: Find the root of x^3 - 4x - 11.',
+    'Clara: The real root is approximately 2.57.',
     '',
     'Recent conversation:',
     formatHistory(chatJid, 'external'),
@@ -471,6 +595,48 @@ async function generateAndSendReply(chatJid, prompt, meta) {
   })
 }
 
+async function sendPreparedReply(chatJid, reply, meta) {
+  return enqueueChatWork(chatJid, meta.reason, async () => {
+    if (!serviceReady || !sock) {
+      log('SEND_ABORT_SERVICE_NOT_READY', { chatJid, meta })
+      return false
+    }
+
+    if (meta.chatVersion !== undefined && getChatVersion(chatJid) !== meta.chatVersion) {
+      log('SEND_ABORT_CHAT_VERSION_CHANGED', {
+        chatJid,
+        reason: meta.reason,
+        expectedVersion: meta.chatVersion,
+        currentVersion: getChatVersion(chatJid)
+      })
+      return false
+    }
+
+    if (meta.requireTakeoverActive && !takeoverActiveChats.has(chatJid)) {
+      log('SEND_ABORT_TAKEOVER_NOT_ACTIVE', { chatJid, reason: meta.reason })
+      return false
+    }
+
+    const res = await sock.sendMessage(chatJid, {
+      text: reply.slice(0, 1500)
+    })
+
+    appendHistory(chatJid, 'assistant', reply)
+
+    if (res?.key?.id) {
+      sentIds.add(res.key.id)
+      setTimeout(() => sentIds.delete(res.key.id), 60_000)
+    }
+
+    logHuman('CLARA_REPLY_SENT', {
+      chatJid,
+      reason: meta.reason,
+      reply: summarizeText(reply, 220)
+    })
+    return true
+  })
+}
+
 function scheduleTakeover(chatJid) {
   clearTakeoverTimer(chatJid, 'reschedule')
 
@@ -517,6 +683,22 @@ function scheduleTakeover(chatJid) {
       chatJid,
       sourceText: latestText
     })
+
+    const directReply = quickExternalReply(latestText)
+    if (directReply) {
+      const sent = await sendPreparedReply(chatJid, directReply, {
+        reason: 'takeover_first_direct_reply',
+        sourceText: latestText,
+        chatVersion: ownerVersionAtSchedule
+      })
+
+      if (sent) {
+        setTakeoverActive(chatJid, true, 'first_reply_sent')
+      } else {
+        log('TAKEOVER_FIRST_REPLY_FAILED', { chatJid })
+      }
+      return
+    }
 
     const prompt = buildExternalPrompt(chatJid)
     const sent = await generateAndSendReply(chatJid, prompt, {
@@ -628,7 +810,19 @@ async function handleExternalMessage(chatJid, text) {
   })
 
   if (takeoverActive) {
+    const directReply = quickExternalReply(text)
     const chatVersion = getChatVersion(chatJid)
+
+    if (directReply) {
+      await sendPreparedReply(chatJid, directReply, {
+        reason: 'takeover_live_direct_reply',
+        sourceText: text,
+        chatVersion,
+        requireTakeoverActive: true
+      })
+      return
+    }
+
     const prompt = buildExternalPrompt(chatJid)
 
     await generateAndSendReply(chatJid, prompt, {

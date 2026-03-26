@@ -1,66 +1,64 @@
 # Clara WhatsApp Assistant
 
-WhatsApp assistant automation built with `@whiskeysockets/baileys` and a local Ollama model.
+Clara is a private WhatsApp assistant built on top of `@whiskeysockets/baileys` and a local Ollama model. It is designed to sit between WhatsApp and a locally hosted LLM, answer low-risk messages directly, and stay out of the way when the owner responds manually.
 
-## What It Does
+## Overview
 
-- Connects to WhatsApp Web through Baileys.
-- Replies to the owner chat immediately.
-- Waits before replying to other chats, so manual owner replies take priority.
-- Keeps per-chat conversation history, including across restarts.
-- Uses a local Ollama model with a Clara-specific `Modelfile`.
+This project connects to WhatsApp Web through Baileys, keeps a small per-chat memory on disk, and uses a Clara-specific prompt to control how replies are generated.
 
-## Conversation Rules
+The assistant has two operating modes:
 
-- Owner chat:
-  - Clara speaks directly with Aditya.
-  - Casual conversation is allowed.
-  - Clara should not act like a relay assistant in this chat.
-- External chats:
-  - Clara speaks as Aditya's assistant.
-  - Clara can answer general questions directly when Aditya is not needed.
-  - Clara must not reveal private information or make promises on Aditya's behalf.
-  - If Aditya personally needs to decide, approve, meet, or respond, Clara relays the request without committing him.
+- Owner chat mode: Clara speaks directly with Aditya in a dedicated control chat.
+- External chat mode: Clara acts as Aditya's assistant, waits before taking over, and avoids making promises or commitments on his behalf.
 
-## Runtime Flow
+## Features
 
-1. Start the bot.
-2. If auth already exists, Baileys connects directly.
-3. If auth does not exist, the terminal prints a QR code.
-4. After WhatsApp connects, the bot starts handling messages.
-5. Owner messages in `CLARA_CHAT_JID` go straight to the LLM.
-6. Other chats wait `OWNER_TAKEOVER_DELAY_SECONDS`.
-7. If the owner replies first, Clara stays silent in that chat.
-8. If Clara takes over once, she continues replying in that chat until the owner re-engages.
+- QR-based WhatsApp Web login using Baileys multi-file auth storage
+- Delayed takeover for external chats so manual replies always get priority
+- Continued assistant replies after takeover until the owner re-engages
+- Local chat history persistence across restarts
+- Local Ollama integration with automatic fallback URL discovery inside WSL
+- Fast canned replies for common questions such as identity and availability
+- Environment-driven configuration for chat IDs, timeouts, paths, and model settings
+
+## How It Works
+
+1. The service boots and loads local chat history from `CHAT_HISTORY_FILE`.
+2. Baileys restores the WhatsApp session from `AUTH_DIR` or prints a QR code if the session is not linked.
+3. Owner messages in `CLARA_CHAT_JID` go directly to the model as an owner conversation.
+4. External messages start a takeover timer defined by `OWNER_TAKEOVER_DELAY_SECONDS`.
+5. If the owner replies before the timer expires, Clara stays silent in that chat.
+6. If the owner does not reply, Clara answers and takeover mode remains active for that chat until the owner sends a message again.
 
 ## Requirements
 
-- Node.js 18 or newer
+- Node.js 18+
 - npm
-- Ollama installed locally
-- WhatsApp account available for linking
+- Ollama installed and running locally or otherwise reachable from WSL
+- A WhatsApp account available for linking
 
-## Installation
+## Setup
+
+Install dependencies:
 
 ```bash
 npm install
 ```
 
-## Ollama Setup
+Create a local environment file:
 
-1. Pull the base model:
+```bash
+cp .env.example .env
+```
+
+Build the Clara model:
 
 ```bash
 ollama pull qwen2.5:3b
-```
-
-2. Build the Clara model from the included `Modelfile`:
-
-```bash
 ollama create qwen2.5:3b-clara -f Modelfile
 ```
 
-3. Start Ollama:
+Start Ollama if it is not already running:
 
 ```bash
 ollama serve
@@ -68,48 +66,52 @@ ollama serve
 
 ## Configuration
 
-The bot reads configuration from `.env`.
+The project reads runtime settings from `.env`. The tracked `.env.example` file is sanitized and intended as the starting template.
 
-Included files:
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `CLARA_CHAT_JID` | Dedicated owner chat JID for direct Clara-to-owner conversation | unset |
+| `OWNER_TAKEOVER_DELAY_SECONDS` | Seconds to wait before Clara replies in external chats | `14` |
+| `AUTH_DIR` | Baileys multi-file auth directory | `./auth` |
+| `OLLAMA_MODEL` | Ollama model tag used for generation | `qwen2.5:3b-clara` |
+| `OLLAMA_URL` | Preferred Ollama base URL | `http://localhost:11434` |
+| `CHAT_HISTORY_FILE` | On-disk history file used across restarts | `./chat-history.json` |
+| `HISTORY_MAX_MESSAGES` | Retained messages per chat | `30` |
+| `LLM_NUM_CTX` | Ollama context window override | `4096` |
 
-- `.env.example`: sanitized template for new environments
-- `.env`: local machine settings, ignored by git
+### Finding `CLARA_CHAT_JID`
 
-Current environment keys:
+If you do not know the owner chat JID yet:
 
-- `CLARA_CHAT_JID`: owner chat JID used for direct owner-to-Clara conversation
-- `OWNER_TAKEOVER_DELAY_SECONDS`: wait time before Clara replies to external chats
-- `AUTH_DIR`: Baileys auth storage path
-- `OLLAMA_MODEL`: Ollama model tag
-- `OLLAMA_URL`: Ollama HTTP endpoint
-- `CHAT_HISTORY_FILE`: persisted per-chat history file
-- `HISTORY_MAX_MESSAGES`: retained messages per chat
-- `LLM_NUM_CTX`: Ollama context window for generation
+1. Start the service.
+2. Send a message from the owner chat you want Clara to use.
+3. Read the `chatJid` shown in the `MESSAGE_EVENT` or `ME_MESSAGE` log output.
+4. Copy that value into `.env` as `CLARA_CHAT_JID`.
 
 ## Running
+
+Start the assistant:
 
 ```bash
 npm start
 ```
 
-Useful command:
+Validate the entrypoint without running the full service:
 
 ```bash
 npm run check
 ```
 
-## Finding `CLARA_CHAT_JID`
+## Runtime Notes
 
-If you do not know the owner chat JID yet:
-
-1. Run the bot.
-2. Send a message from the owner chat.
-3. Read the `chatJid` shown in the `MESSAGE_EVENT` or `ME_MESSAGE` log.
-4. Set that value in `.env`.
+- The service is intended to run inside WSL.
+- Ollama discovery prefers `OLLAMA_URL`, then tries common local endpoints, including the host bridge IP exposed to WSL.
+- `auth/` and `.env` are intentionally ignored by Git because they may contain sensitive local state.
+- `chat-history.json` is local state only and should not be committed.
 
 ## Logs
 
-The runtime keeps logs intentionally short. The most useful lines are:
+The runtime keeps logs short enough to scan live. The most useful human-facing log labels are:
 
 - `CONNECTION_UPDATE`
 - `SERVICE_READY`
@@ -124,23 +126,17 @@ The runtime keeps logs intentionally short. The most useful lines are:
 
 ## Repository Layout
 
-- `index.js`: main WhatsApp bot runtime
+- `index.js`: main runtime and message orchestration
 - `Modelfile`: Clara-specific Ollama model definition
-- `.env.example`: configuration template
-- `README.md`: project setup and operating notes
+- `.env.example`: sanitized configuration template
+- `README.md`: setup and operating notes
 
-## Data and Security Notes
+## Security
 
-- `auth/` is local-only and must never be committed.
-- `chat-history.json` stores per-chat memory locally and is ignored by git.
-- `.env` is local-only and may contain sensitive identifiers.
+- Do not commit `auth/`. It contains WhatsApp session material.
+- Do not commit `.env`. It may contain chat identifiers and local endpoints.
+- Review Clara's prompt and the canned replies before using this with a real WhatsApp account.
 
-## Dependencies
+## License
 
-Core packages:
-
-- `@whiskeysockets/baileys`
-- `axios`
-- `dotenv`
-- `pino`
-- `qrcode-terminal`
+This project is released under the MIT License. See `LICENSE` for details.

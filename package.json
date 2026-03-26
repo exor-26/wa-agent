@@ -1,7 +1,7 @@
 {
   "name": "wa-agent",
   "version": "1.0.0",
-  "description": "WhatsApp assistant automation powered by Baileys and Ollama.",
+  "description": "Private WhatsApp assistant automation powered by Baileys and a local Ollama model.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -14,8 +14,19 @@
     "assistant",
     "automation"
   ],
-  "author": "",
-  "license": "ISC",
+  "author": "Aditya Singh",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/exor-26/wa-agent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/exor-26/wa-agent/issues"
+  },
+  "homepage": "https://github.com/exor-26/wa-agent#readme",
   "dependencies": {
     "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "axios": "^1.13.4",
