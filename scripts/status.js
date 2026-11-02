@@ -1,0 +1,15 @@
+const { config } = require('../src/config')
+const { inspect } = require('../src/runtime')
+const status = inspect(config)
+if (process.argv.includes('--json')) console.log(JSON.stringify(status, null, 2))
+else {
+  console.log(`Clara: ${status.running ? `RUNNING (PID ${status.pid})` : status.supervised ? 'SUPERVISED / WAITING' : 'STOPPED'}`)
+  if (status.supervised) console.log(`Recovery supervisor: RUNNING (PID ${status.supervisorPid}), restarts: ${status.restarts ?? 'unknown'}`)
+  console.log(`WhatsApp: ${status.connection.toUpperCase().replaceAll('_', ' ')}`)
+  console.log(`Model: ${status.model} / low`)
+  if (status.detail) console.log(`Connection detail: ${JSON.stringify(status.detail)}`)
+  if (status.retryAt) console.log(`Next worker restart: ${status.retryAt}`)
+  if (status.connection === 'pairing') console.log(`Scan the QR in the running terminal or open ${status.qrFile}`)
+  if (status.running && status.connection === 'unknown') console.log('No fresh connection report. Restart Clara to enable reporting, or check its terminal.')
+  if (!status.running && !status.supervised) console.log('Start and live logs: npm run live')
+}

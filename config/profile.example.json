@@ -1,0 +1,12 @@
+{
+  "owner": "Your Name",
+  "timezone": "Asia/Kolkata",
+  "public": {
+    "description": "Add the professional information Clara may share.",
+    "links": {}
+  },
+  "schedule": {
+    "weekday": [{ "start": 0, "end": 1440, "status": "unknown", "activity": null }],
+    "weekend": [{ "start": 0, "end": 1440, "status": "unknown", "activity": null }]
+  }
+}
